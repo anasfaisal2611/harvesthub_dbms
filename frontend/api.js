@@ -24,8 +24,17 @@
   function getApiBase() {
     const b = localStorage.getItem(STORAGE_API_BASE);
     if (b && b.trim()) return b.trim().replace(/\/+$/, "");
-    if (typeof window !== "undefined" && window.location.pathname.startsWith("/app")) {
-      return window.location.origin.replace(/\/+$/, "");
+    if (typeof window !== "undefined") {
+      const { origin, hostname, pathname, protocol } = window.location;
+      if (pathname.startsWith("/app")) return origin.replace(/\/+$/, "");
+      if (
+        /^https?:$/i.test(protocol) &&
+        hostname &&
+        hostname !== "localhost" &&
+        hostname !== "127.0.0.1"
+      ) {
+        return origin.replace(/\/+$/, "");
+      }
     }
     return "http://127.0.0.1:5000";
   }

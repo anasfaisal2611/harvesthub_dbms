@@ -32,10 +32,14 @@ app.add_middleware(
 
 @app.middleware("http")
 async def disable_cache_for_app_ui(request, call_next):
-    """Avoid stale HTML/JS when the UI is served from /app/ (browser cache)."""
+    """Avoid stale HTML/JS when the UI is served from the same FastAPI app."""
     response = await call_next(request)
     p = request.url.path
-    if p == "/app" or p.startswith("/app/"):
+    if (
+        p in {"/", "/index.html", "/app"}
+        or p.startswith("/app/")
+        or p.endswith((".js", ".css", ".html"))
+    ):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -101,6 +105,8 @@ if _frontend.is_dir():
     app.mount("/app", StaticFiles(directory=str(_frontend), html=True), name="frontend")
 if _uploads.is_dir():
     app.mount("/media", StaticFiles(directory=str(_uploads)), name="media")
+if _frontend.is_dir():
+    app.mount("/", StaticFiles(directory=str(_frontend), html=True), name="frontend_root")
 
 
 @app.on_event("startup")
@@ -110,21 +116,6 @@ def startup_tasks():
 @app.get("/api/health", tags=["Health"])
 def health_check():
     return {"status": "healthy", "message": "HarvestHUB API is running", "version": "2.0.0"}
-
-@app.get("/", tags=["Health"])
-def root():
-    return {
-        "message": "HarvestHUB API",
-        "version": "2.0.0",
-        "endpoints": {
-            "auth": "/api/auth/",
-            "users": "/api/users/",
-            "fields": "/api/fields/",
-            "crop_cycles": "/api/crop-cycles/"
-        },
-        "docs": "/docs",
-        "frontend": "/app/",
-    }
 
 if __name__ == "__main__":
     import uvicorn
