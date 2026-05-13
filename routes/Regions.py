@@ -111,3 +111,24 @@ async def update_region_cell(region_id: int, update_data: RegionCellUpdate, auth
     except Exception as e:
         logger.error(f"Error updating region: {e}")
         raise HTTPException(status_code=500, detail="Failed to update region")
+
+
+@router.delete("/{region_id}", tags=["Regions"])
+async def delete_region(region_id: int, authorization: str = Header(None)):
+    """DELETE region - admin only"""
+    try:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        user_id = extract_user_id(authorization)
+        RoleBasedAccessControl.check_permission(user_id, 'regions', 'delete')
+        region = RegionQueries.get_region_by_id(region_id)
+        if not region:
+            raise HTTPException(status_code=404, detail="Region not found")
+        RegionQueries.delete_region(region_id)
+        logger.info(f"Region {region_id} deleted by user {user_id}")
+        return {"message": "Region deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting region: {e}")
+        raise HTTPException(status_code=400, detail="Failed to delete region")

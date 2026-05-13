@@ -30,7 +30,7 @@ ROLE_PERMISSIONS={
         'derived_metrics':['create','read','update','delete'],
         'alerts':['create','read','update','delete'], },
     'agronomist':{
-        'users': ['read'],
+        'users': ['read', 'update'],
         'regions': ['read'],
         'fields': ['read', 'update'],
         'crop_cycles': ['create', 'read', 'update'],
@@ -43,7 +43,7 @@ ROLE_PERMISSIONS={
     },
 
     'farmer':{
-        'users': ['read'],
+        'users': ['read', 'update'],
         'regions': ['read'],
         'fields': ['read', 'update'],
         'crop_cycles': ['read', 'update'],
@@ -185,7 +185,7 @@ class AuthService:
                 additional_claims={"role": user.get("role")},
                 expires_delta=timedelta(hours=24)
             )
-            logger.info(f"User logged in: {email}, role: {user.get("role")}")
+            logger.info(f"User logged in: {email}, role: {user.get('role')}")
             return {"access_token": access_token, "user": user}, 200
         except HTTPException:
             raise

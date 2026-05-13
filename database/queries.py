@@ -18,9 +18,9 @@ class UserQueries:
         db = SessionLocal()
         try:
             query = text("""
-                INSERT INTO users (name, email, password_hash, role, is_active)
-                VALUES (:name, :email, :password_hash, :role, TRUE)
-                RETURNING user_id, email, role, created_at
+                INSERT INTO users (name, email, password_hash, role, is_active, avatar_url)
+                VALUES (:name, :email, :password_hash, :role, TRUE, NULL)
+                RETURNING user_id, name, email, role, avatar_url, created_at
             """)
             result = db.execute(query, {
                 "name": name,
@@ -30,7 +30,14 @@ class UserQueries:
             })
             db.commit()
             row = result.fetchone()
-            return {"user_id": row[0], "email": row[1], "role": row[2], "created_at": row[3]} if row else None
+            return {
+                "user_id": row[0],
+                "name": row[1],
+                "email": row[2],
+                "role": row[3],
+                "avatar_url": row[4],
+                "created_at": row[5],
+            } if row else None
         except Exception as e:
             db.rollback()
             logger.error(f"Error creating user: {e}")
@@ -44,7 +51,7 @@ class UserQueries:
         db = SessionLocal()
         try:
             query = text("""
-                SELECT user_id, email, password_hash, role, is_active, created_at
+                SELECT user_id, name, email, password_hash, role, is_active, avatar_url, created_at
                 FROM users
                 WHERE email = :email
             """)
@@ -52,11 +59,13 @@ class UserQueries:
             row = result.fetchone()
             return {
                 "user_id": row[0], 
-                "email": row[1], 
-                "password_hash": row[2], 
-                "role": row[3],
-                "is_active": row[4],
-                "created_at": row[5]
+                "name": row[1],
+                "email": row[2], 
+                "password_hash": row[3], 
+                "role": row[4],
+                "is_active": row[5],
+                "avatar_url": row[6],
+                "created_at": row[7]
             } if row else None
         finally:
             db.close()
@@ -67,7 +76,7 @@ class UserQueries:
         db = SessionLocal()
         try:
             query = text("""
-                SELECT user_id, name, email, role, is_active, created_at
+                SELECT user_id, name, email, role, is_active, avatar_url, created_at
                 FROM users
                 WHERE user_id = :user_id
             """)
@@ -79,7 +88,8 @@ class UserQueries:
                 "email": row[2],
                 "role": row[3],
                 "is_active": row[4],
-                "created_at": row[5]
+                "avatar_url": row[5],
+                "created_at": row[6]
             } if row else None
         finally:
             db.close()
@@ -90,7 +100,7 @@ class UserQueries:
         db = SessionLocal()
         try:
             query = text("""
-                SELECT user_id, name, email, role, is_active, created_at
+                SELECT user_id, name, email, role, is_active, avatar_url, created_at
                 FROM users
                 ORDER BY created_at DESC
             """)
@@ -103,7 +113,8 @@ class UserQueries:
                     "email": row[2],
                     "role": row[3],
                     "is_active": row[4],
-                    "created_at": row[5]
+                    "avatar_url": row[5],
+                    "created_at": row[6]
                 }
                 for row in rows
             ]
@@ -111,16 +122,19 @@ class UserQueries:
             db.close()
     
     @staticmethod
-    def update_user(user_id, name=None, email=None):
+    def update_user(user_id, name=None, email=None, avatar_url=None):
         """UPDATE user - full row update"""
         db = SessionLocal()
         try:
-            if name:
+            if name is not None:
                 query = text("UPDATE users SET name = :name WHERE user_id = :user_id")
                 db.execute(query, {"name": name, "user_id": user_id})
-            if email:
+            if email is not None:
                 query = text("UPDATE users SET email = :email WHERE user_id = :user_id")
                 db.execute(query, {"email": email, "user_id": user_id})
+            if avatar_url is not None:
+                query = text("UPDATE users SET avatar_url = :avatar_url WHERE user_id = :user_id")
+                db.execute(query, {"avatar_url": avatar_url, "user_id": user_id})
             db.commit()
             return True
         except Exception as e:
@@ -136,7 +150,7 @@ class UserQueries:
         db = SessionLocal()
         try:
             # Whitelist allowed columns to prevent SQL injection
-            allowed_columns = ['name', 'email', 'role', 'is_active']
+            allowed_columns = ['name', 'email', 'role', 'is_active', 'avatar_url']
             if column_name not in allowed_columns:
                 raise ValueError(f"Invalid column: {column_name}")
             
@@ -147,6 +161,22 @@ class UserQueries:
         except Exception as e:
             db.rollback()
             logger.error(f"Error updating user cell: {e}")
+            raise
+        finally:
+            db.close()
+
+    @staticmethod
+    def set_user_avatar(user_id, avatar_url):
+        """Update avatar URL for a user"""
+        db = SessionLocal()
+        try:
+            query = text("UPDATE users SET avatar_url = :avatar_url WHERE user_id = :user_id")
+            db.execute(query, {"avatar_url": avatar_url, "user_id": user_id})
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error updating user avatar: {e}")
             raise
         finally:
             db.close()
@@ -262,6 +292,22 @@ class RegionQueries:
         except Exception as e:
             db.rollback()
             logger.error(f"Error updating region cell: {e}")
+            raise
+        finally:
+            db.close()
+
+    @staticmethod
+    def delete_region(region_id):
+        """DELETE region"""
+        db = SessionLocal()
+        try:
+            query = text("DELETE FROM regions WHERE id = :region_id")
+            db.execute(query, {"region_id": region_id})
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error deleting region: {e}")
             raise
         finally:
             db.close()
@@ -549,6 +595,22 @@ class SatelliteQueries:
         except Exception as e:
             db.rollback()
             logger.error(f"Error updating satellite cell: {e}")
+            raise
+        finally:
+            db.close()
+
+    @staticmethod
+    def delete_satellite(satellite_id):
+        """DELETE satellite"""
+        db = SessionLocal()
+        try:
+            query = text("DELETE FROM satellites WHERE id = :satellite_id")
+            db.execute(query, {"satellite_id": satellite_id})
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error deleting satellite: {e}")
             raise
         finally:
             db.close()
@@ -875,6 +937,22 @@ class ObservationQueries:
         finally:
             db.close()
 
+    @staticmethod
+    def delete_observation(observation_id):
+        """DELETE observation"""
+        db = SessionLocal()
+        try:
+            query = text("DELETE FROM observations WHERE id = :observation_id")
+            db.execute(query, {"observation_id": observation_id})
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error deleting observation: {e}")
+            raise
+        finally:
+            db.close()
+
 # ============ BAND VALUES QUERIES (TABLE 7) ============
 class BandValueQueries:
     """Complete CRUD operations for band_values table"""
@@ -901,6 +979,28 @@ class BandValueQueries:
                 }
                 for row in rows
             ]
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_band_value_by_id(band_id):
+        """SELECT band value by ID"""
+        db = SessionLocal()
+        try:
+            query = text("""
+                SELECT id, observation_id, band_name, band_value, created_at
+                FROM band_values
+                WHERE id = :band_id
+            """)
+            result = db.execute(query, {"band_id": band_id})
+            row = result.fetchone()
+            return {
+                "id": row[0],
+                "observation_id": row[1],
+                "band_name": row[2],
+                "band_value": row[3],
+                "created_at": row[4]
+            } if row else None
         finally:
             db.close()
     
@@ -949,6 +1049,22 @@ class BandValueQueries:
         finally:
             db.close()
 
+    @staticmethod
+    def delete_band_value(band_id):
+        """DELETE band value"""
+        db = SessionLocal()
+        try:
+            query = text("DELETE FROM band_values WHERE id = :band_id")
+            db.execute(query, {"band_id": band_id})
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error deleting band value: {e}")
+            raise
+        finally:
+            db.close()
+
 # ============ WEATHER RECORDS QUERIES (TABLE 8) ============
 class WeatherQueries:
     """Complete CRUD operations for weather_records table"""
@@ -980,6 +1096,33 @@ class WeatherQueries:
                 }
                 for row in rows
             ]
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_weather_by_id(weather_id):
+        """SELECT weather record by ID"""
+        db = SessionLocal()
+        try:
+            query = text("""
+                SELECT id, field_id, date, temperature, rainfall, humidity, wind_speed, wind_direction, pressure, created_at
+                FROM weather_records
+                WHERE id = :weather_id
+            """)
+            result = db.execute(query, {"weather_id": weather_id})
+            row = result.fetchone()
+            return {
+                "id": row[0],
+                "field_id": row[1],
+                "date": row[2],
+                "temperature": row[3],
+                "rainfall": row[4],
+                "humidity": row[5],
+                "wind_speed": row[6],
+                "wind_direction": row[7],
+                "pressure": row[8],
+                "created_at": row[9]
+            } if row else None
         finally:
             db.close()
     
@@ -1063,6 +1206,22 @@ class WeatherQueries:
         finally:
             db.close()
 
+    @staticmethod
+    def delete_weather(weather_id):
+        """DELETE weather record"""
+        db = SessionLocal()
+        try:
+            query = text("DELETE FROM weather_records WHERE id = :weather_id")
+            db.execute(query, {"weather_id": weather_id})
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error deleting weather record: {e}")
+            raise
+        finally:
+            db.close()
+
 # ============ DERIVED METRICS QUERIES (TABLE 9) ============
 class DerivedMetricsQueries:
     """Complete CRUD operations for derived_metrics table"""
@@ -1091,6 +1250,30 @@ class DerivedMetricsQueries:
                 }
                 for row in rows
             ]
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_metric_by_id(metric_id):
+        """SELECT derived metric by ID"""
+        db = SessionLocal()
+        try:
+            query = text("""
+                SELECT id, observation_id, ndvi, evi, soil_moisture, crop_health_score, created_at
+                FROM derived_metrics
+                WHERE id = :metric_id
+            """)
+            result = db.execute(query, {"metric_id": metric_id})
+            row = result.fetchone()
+            return {
+                "id": row[0],
+                "observation_id": row[1],
+                "ndvi": row[2],
+                "evi": row[3],
+                "soil_moisture": row[4],
+                "crop_health_score": row[5],
+                "created_at": row[6]
+            } if row else None
         finally:
             db.close()
     
@@ -1137,6 +1320,22 @@ class DerivedMetricsQueries:
         except Exception as e:
             db.rollback()
             logger.error(f"Error updating metric cell: {e}")
+            raise
+        finally:
+            db.close()
+
+    @staticmethod
+    def delete_metric(metric_id):
+        """DELETE derived metric"""
+        db = SessionLocal()
+        try:
+            query = text("DELETE FROM derived_metrics WHERE id = :metric_id")
+            db.execute(query, {"metric_id": metric_id})
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error deleting derived metric: {e}")
             raise
         finally:
             db.close()

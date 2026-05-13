@@ -34,6 +34,7 @@ class UserLogin(BaseModel):
 class UserResponse(UserBase):
     user_id: int
     is_active: bool
+    avatar_url: Optional[str] = None
     created_at: datetime
     class Config:
         from_attributes = True
@@ -44,6 +45,7 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     password: Optional[str] = None
     is_active: Optional[bool] = None
+    avatar_url: Optional[str] = None
     @field_validator("password")
     @classmethod
     def validate_password(cls, password):

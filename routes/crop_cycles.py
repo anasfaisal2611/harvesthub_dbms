@@ -69,20 +69,20 @@ async def get_all_crop_cycles(authorization: str = Header(None)):
             cycles = CropCycleQueries.get_all_crop_cycles()
             visibility = "all cycles"
         
-        logger.info(f"✅ User {user_id} ({user['role']}) retrieved {len(cycles)} crop cycles")
-        
+        logger.info(f"User {user_id} ({user['role']}) retrieved {len(cycles)} crop cycles")
+
         return {
             "count": len(cycles),
             "user_role": user['role'],
             "visibility": visibility,
             "crop_cycles": cycles
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting crop cycles: {e}")
-        return {"error": "Failed to retrieve crop cycles"}, 500
+        raise HTTPException(status_code=500, detail="Failed to retrieve crop cycles")
 
 @router.get("/{cycle_id}", tags=["Crop Cycles"])
 async def get_crop_cycle_by_id(cycle_id: int, authorization: str = Header(None)):
@@ -118,15 +118,15 @@ async def get_crop_cycle_by_id(cycle_id: int, authorization: str = Header(None))
             if not field or field['user_id'] != user_id:
                 raise HTTPException(status_code=403, detail="Access denied")
         
-        logger.info(f"✅ Crop cycle {cycle_id} retrieved by user {user_id}")
-        
-        return cycle, 200
-    
-    except HTTPException as e:
-        raise e
+        logger.info(f"Crop cycle {cycle_id} retrieved by user {user_id}")
+
+        return cycle
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting crop cycle: {e}")
-        return {"error": "Failed to retrieve crop cycle"}, 500
+        raise HTTPException(status_code=500, detail="Failed to retrieve crop cycle")
 
 @router.get("/field/{field_id}", tags=["Crop Cycles"])
 async def get_cycles_by_field(field_id: int, authorization: str = Header(None)):
@@ -162,20 +162,20 @@ async def get_cycles_by_field(field_id: int, authorization: str = Header(None)):
         # GET cycles for field using DML
         cycles = CropCycleQueries.get_cycles_by_field(field_id)
         
-        logger.info(f"✅ Retrieved {len(cycles)} cycles for field {field_id}")
-        
+        logger.info(f"Retrieved {len(cycles)} cycles for field {field_id}")
+
         return {
             "field_name": field['field_name'],
             "field_id": field_id,
             "count": len(cycles),
             "crop_cycles": cycles
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting cycles by field: {e}")
-        return {"error": "Failed to retrieve cycles"}, 500
+        raise HTTPException(status_code=500, detail="Failed to retrieve cycles")
 
 @router.post("/", status_code=201, tags=["Crop Cycles"])
 async def create_crop_cycle(cycle_data: CropCycleCreate, authorization: str = Header(None)):
@@ -218,20 +218,20 @@ async def create_crop_cycle(cycle_data: CropCycleCreate, authorization: str = He
         )
         
         if not result:
-            return {"error": "Failed to create crop cycle"}, 500
-        
-        logger.info(f"✅ Crop cycle created: {cycle_data.crop_name} in field {cycle_data.field_id}")
-        
+            raise HTTPException(status_code=500, detail="Failed to create crop cycle")
+
+        logger.info(f"Crop cycle created: {cycle_data.crop_name} in field {cycle_data.field_id}")
+
         return {
             "message": "Crop cycle created successfully",
             "cycle": result
-        }, 201
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating crop cycle: {e}")
-        return {"error": "Failed to create crop cycle"}, 400
+        raise HTTPException(status_code=400, detail="Failed to create crop cycle")
 
 @router.put("/{cycle_id}", tags=["Crop Cycles"])
 async def update_crop_cycle(cycle_id: int, cycle_data: CropCycleUpdate, authorization: str = Header(None)):
@@ -275,21 +275,20 @@ async def update_crop_cycle(cycle_id: int, cycle_data: CropCycleUpdate, authoriz
             actual_yield=cycle_data.actual_yield
         )
         
-        # GET updated cycle
         updated_cycle = CropCycleQueries.get_crop_cycle_by_id(cycle_id)
-        
-        logger.info(f"✅ Crop cycle {cycle_id} updated by user {user_id}")
-        
+
+        logger.info(f"Crop cycle {cycle_id} updated by user {user_id}")
+
         return {
             "message": "Crop cycle updated successfully",
             "cycle": updated_cycle
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating crop cycle: {e}")
-        return {"error": "Failed to update crop cycle"}, 400
+        raise HTTPException(status_code=400, detail="Failed to update crop cycle")
 
 @router.patch("/{cycle_id}/cell", tags=["Crop Cycles"])
 async def update_cycle_cell(cycle_id: int, update_data: CropCycleCellUpdate, authorization: str = Header(None)):
@@ -341,20 +340,20 @@ async def update_cycle_cell(cycle_id: int, update_data: CropCycleCellUpdate, aut
             value=update_data.value
         )
         
-        logger.info(f"✅ Crop cycle {cycle_id} cell updated: {update_data.column_name}")
-        
+        logger.info(f"Crop cycle {cycle_id} cell updated: {update_data.column_name}")
+
         return {
             "message": f"Crop cycle {update_data.column_name} updated successfully",
             "cycle_id": cycle_id,
             "column": update_data.column_name,
             "new_value": update_data.value
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating cycle cell: {e}")
-        return {"error": "Failed to update crop cycle"}, 400
+        raise HTTPException(status_code=400, detail="Failed to update crop cycle")
 
 @router.delete("/{cycle_id}", tags=["Crop Cycles"])
 async def delete_crop_cycle(cycle_id: int, authorization: str = Header(None)):
@@ -392,18 +391,17 @@ async def delete_crop_cycle(cycle_id: int, authorization: str = Header(None)):
             if not field or field['user_id'] != user_id:
                 raise HTTPException(status_code=403, detail="Cannot delete others' cycles")
         
-        # DELETE crop cycle using DML
         CropCycleQueries.delete_crop_cycle(cycle_id)
-        
-        logger.info(f"✅ Crop cycle {cycle_id} deleted by user {user_id}")
-        
-        return {"message": "Crop cycle deleted successfully"}, 200
-    
-    except HTTPException as e:
-        raise e
+
+        logger.info(f"Crop cycle {cycle_id} deleted by user {user_id}")
+
+        return {"message": "Crop cycle deleted successfully"}
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error deleting crop cycle: {e}")
-        return {"error": "Failed to delete crop cycle"}, 400
+        raise HTTPException(status_code=400, detail="Failed to delete crop cycle")
 
 # ============ COMPLEX QUERY ROUTES (JOINs & GROUP BY) ============
 
@@ -437,19 +435,19 @@ async def get_active_cycles(authorization: str = Header(None)):
         else:
             cycles = CropCycleQueries.get_active_cycles()
         
-        logger.info(f"✅ Retrieved {len(cycles)} active crop cycles")
-        
+        logger.info(f"Retrieved {len(cycles)} active crop cycles")
+
         return {
             "count": len(cycles),
             "status": "active",
             "crop_cycles": cycles
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting active cycles: {e}")
-        return {"error": "Failed to retrieve cycles"}, 500
+        raise HTTPException(status_code=500, detail="Failed to retrieve cycles")
 
 @router.get("/analytics/yield-analysis", tags=["Crop Cycles - Analytics"])
 async def get_yield_analysis(authorization: str = Header(None)):
@@ -475,16 +473,16 @@ async def get_yield_analysis(authorization: str = Header(None)):
         # GROUP BY + AGGREGATION query
         analysis = ComplexQueries.get_crop_yield_analysis()
         
-        logger.info(f"✅ Crop yield analysis retrieved")
-        
+        logger.info("Crop yield analysis retrieved")
+
         return {
             "message": "Crop yield analysis",
             "data": analysis,
             "total_crops": len(analysis)
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting yield analysis: {e}")
-        return {"error": "Failed to retrieve analysis"}, 500
+        raise HTTPException(status_code=500, detail="Failed to retrieve analysis")

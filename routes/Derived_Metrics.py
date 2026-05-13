@@ -128,3 +128,24 @@ async def update_metric_cell(metric_id: int, update_data: DerivedMetricCellUpdat
     except Exception as e:
         logger.error(f"Error updating derived metric: {e}")
         raise HTTPException(status_code=500, detail="Failed to update derived metric")
+
+
+@router.delete("/{metric_id}", tags=["Derived Metrics"])
+async def delete_metric(metric_id: int, authorization: str = Header(None)):
+    """DELETE derived metric - admin only"""
+    try:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        user_id = extract_user_id(authorization)
+        RoleBasedAccessControl.check_permission(user_id, 'derived_metrics', 'delete')
+        metric = DerivedMetricsQueries.get_metric_by_id(metric_id)
+        if not metric:
+            raise HTTPException(status_code=404, detail="Derived metric not found")
+        DerivedMetricsQueries.delete_metric(metric_id)
+        logger.info(f"Derived metric {metric_id} deleted by user {user_id}")
+        return {"message": "Derived metric deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting derived metric: {e}")
+        raise HTTPException(status_code=400, detail="Failed to delete derived metric")

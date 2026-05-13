@@ -154,3 +154,24 @@ async def update_observation_cell(observation_id: int, update_data: ObservationC
     except Exception as e:
         logger.error(f"Error updating observation: {e}")
         raise HTTPException(status_code=500, detail="Failed to update observation")
+
+
+@router.delete("/{observation_id}", tags=["Observations"])
+async def delete_observation(observation_id: int, authorization: str = Header(None)):
+    """DELETE observation - admin only"""
+    try:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        user_id = extract_user_id(authorization)
+        RoleBasedAccessControl.check_permission(user_id, 'observations', 'delete')
+        observation = ObservationQueries.get_observation_by_id(observation_id)
+        if not observation:
+            raise HTTPException(status_code=404, detail="Observation not found")
+        ObservationQueries.delete_observation(observation_id)
+        logger.info(f"Observation {observation_id} deleted by user {user_id}")
+        return {"message": "Observation deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting observation: {e}")
+        raise HTTPException(status_code=400, detail="Failed to delete observation")

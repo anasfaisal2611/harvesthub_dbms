@@ -125,3 +125,24 @@ async def update_band_value_cell(band_id: int, update_data: BandValueCellUpdate,
     except Exception as e:
         logger.error(f"Error updating band value: {e}")
         raise HTTPException(status_code=500, detail="Failed to update band value")
+
+
+@router.delete("/{band_id}", tags=["Band Values"])
+async def delete_band_value(band_id: int, authorization: str = Header(None)):
+    """DELETE band value - admin only"""
+    try:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        user_id = extract_user_id(authorization)
+        RoleBasedAccessControl.check_permission(user_id, 'band_values', 'delete')
+        band_value = BandValueQueries.get_band_value_by_id(band_id)
+        if not band_value:
+            raise HTTPException(status_code=404, detail="Band value not found")
+        BandValueQueries.delete_band_value(band_id)
+        logger.info(f"Band value {band_id} deleted by user {user_id}")
+        return {"message": "Band value deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting band value: {e}")
+        raise HTTPException(status_code=400, detail="Failed to delete band value")

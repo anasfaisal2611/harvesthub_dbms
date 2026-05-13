@@ -1,9 +1,13 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
+from starlette.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import logging
-
+from routes import reports
+from database.database import apply_startup_migrations
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -11,7 +15,7 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 app = FastAPI(
-    title="Crop Management DBMS API",
+    title="HarvestHUB API",
     description="Agricultural field management with RBAC",
     version="2.0.0",
     swagger_ui_parameters={"persistAuthorization": True},  # keeps token after page refresh
@@ -24,6 +28,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def disable_cache_for_app_ui(request, call_next):
+    """Avoid stale HTML/JS when the UI is served from /app/ (browser cache)."""
+    response = await call_next(request)
+    p = request.url.path
+    if p == "/app" or p.startswith("/app/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 # ✅ This adds the lock icon and Bearer token input to Swagger
 def custom_openapi():
@@ -74,16 +90,31 @@ app.include_router(weather_router,         prefix="/api/weather",         tags=[
 app.include_router(alerts_router,          prefix="/api/alerts",          tags=["Alerts"])
 app.include_router(band_values_router,     prefix="/api/band-values",     tags=["Band Values"])
 app.include_router(derived_metrics_router, prefix="/api/derived-metrics", tags=["Derived Metrics"])
+app.include_router(reports.router, prefix="/api", tags=["Reports"])
 
+_frontend = Path(__file__).resolve().parent / "frontend"
+_uploads = Path(__file__).resolve().parent / "uploads"
+_uploads.mkdir(parents=True, exist_ok=True)
+(_uploads / "avatars").mkdir(parents=True, exist_ok=True)
+
+if _frontend.is_dir():
+    app.mount("/app", StaticFiles(directory=str(_frontend), html=True), name="frontend")
+if _uploads.is_dir():
+    app.mount("/media", StaticFiles(directory=str(_uploads)), name="media")
+
+
+@app.on_event("startup")
+def startup_tasks():
+    apply_startup_migrations()
 
 @app.get("/api/health", tags=["Health"])
 def health_check():
-    return {"status": "healthy", "message": "Crop Management DBMS API is running", "version": "2.0.0"}
+    return {"status": "healthy", "message": "HarvestHUB API is running", "version": "2.0.0"}
 
 @app.get("/", tags=["Health"])
 def root():
     return {
-        "message": "Crop Management DBMS API",
+        "message": "HarvestHUB API",
         "version": "2.0.0",
         "endpoints": {
             "auth": "/api/auth/",
@@ -91,7 +122,8 @@ def root():
             "fields": "/api/fields/",
             "crop_cycles": "/api/crop-cycles/"
         },
-        "docs": "/docs"
+        "docs": "/docs",
+        "frontend": "/app/",
     }
 
 if __name__ == "__main__":

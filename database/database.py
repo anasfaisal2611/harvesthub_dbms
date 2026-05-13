@@ -1,6 +1,8 @@
 # database/database.py
 # Database connection for raw SQL DML operations (DDL tables pre-created in PgAdmin)
 
+from pathlib import Path
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import os
@@ -9,6 +11,8 @@ import logging
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+DB_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = DB_DIR.parent
 
 # ============ DATABASE CONFIGURATION ============
 
@@ -23,6 +27,20 @@ DB_NAME = os.getenv("DB_NAME", "cropdb")
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 logger.info(f"Connecting to PostgreSQL: {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+
+
+# --- DEBUGGING SECTION ---
+print("--- DEBUG START ---")
+print(f"Looking for DB_PASSWORD in environment...")
+pwd = os.getenv("DB_PASSWORD")
+print(f"Found password in env: '{pwd}'") 
+print(f"DATABASE_URL being built: postgresql://{DB_USER}:{pwd}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+print("--- DEBUG END ---")
+# -------------------------
+
+
+
+
 
 # ============ CREATE ENGINE ============
 
@@ -123,6 +141,24 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def apply_startup_migrations():
+    """Apply safe additive migrations needed by the current app version."""
+    migration_files = [
+        DB_DIR / "001_add_user_avatar.sql",
+    ]
+
+    with engine.begin() as conn:
+        for migration_path in migration_files:
+            if not migration_path.exists():
+                logger.warning(f"Migration file not found: {migration_path.name}")
+                continue
+            sql = migration_path.read_text(encoding="utf-8").strip()
+            if not sql:
+                continue
+            conn.execute(text(sql))
+            logger.info(f"Applied startup migration: {migration_path.name}")
 
 # ============ INITIALIZATION ============
 

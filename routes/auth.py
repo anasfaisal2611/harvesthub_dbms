@@ -1,6 +1,8 @@
 # routes/auth.py
 # Authentication routes with raw DML queries and RBAC
 
+import email
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import logging
@@ -55,46 +57,39 @@ async def register(user_data: UserRegister):
         User details with status 201
     """
     try:
-        # Validate input
         if not user_data.name or len(user_data.name) < 2:
-            return {"error": "Name must be at least 2 characters"}, 400
-        
+            raise HTTPException(status_code=400, detail="Name must be at least 2 characters")
         if not user_data.email or "@" not in user_data.email:
-            return {"error": "Invalid email format"}, 400
-        
+            raise HTTPException(status_code=400, detail="Invalid email format")
         if not user_data.password or len(user_data.password) < 6:
-            return {"error": "Password must be at least 6 characters"}, 400
-        
-        # Validate role
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
         valid_roles = ['farmer', 'agronomist', 'admin']
         if user_data.role not in valid_roles:
-            return {"error": f"Role must be one of: {', '.join(valid_roles)}"}, 400
-        
-        # Check if user already exists using DML SELECT
+            raise HTTPException(status_code=400, detail=f"Role must be one of: {', '.join(valid_roles)}")
+
         existing_user = UserQueries.get_user_by_email(user_data.email)
         if existing_user:
             logger.warning(f"Registration failed: Email {user_data.email} already registered")
             raise HTTPException(
-                status_code=409, 
+                status_code=409,
                 detail=f"User with email {user_data.email} already exists"
             )
-        
-        # Hash password
+
         password_hash = AuthService.hash_password(user_data.password)
-        
-        # INSERT new user using DML
+
         result = UserQueries.create_user(
             name=user_data.name,
             email=user_data.email,
             password_hash=password_hash,
             role=user_data.role
         )
-        
+
         if not result:
-            return {"error": "Failed to create user"}, 500
-        
-        logger.info(f"✅ User registered: {user_data.email} (role: {user_data.role})")
-        
+            raise HTTPException(status_code=500, detail="Failed to create user")
+
+        logger.info(f"User registered: {user_data.email} (role: {user_data.role})")
+
         return {
             "message": "User registered successfully",
             "user": {
@@ -102,13 +97,13 @@ async def register(user_data: UserRegister):
                 "email": result["email"],
                 "role": result["role"]
             }
-        }, 201
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"❌ Registration error: {str(e)}")
-        return {"error": "Registration failed", "message": str(e)}, 400
+        logger.error(f"Registration error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Registration failed: {str(e)}")
 
 @router.post("/login", tags=["Authentication"])
 async def login(login_data: UserLogin):
@@ -122,69 +117,50 @@ async def login(login_data: UserLogin):
         JWT token with user details
     """
     try:
-        # Validate input
         if not login_data.email:
-            return {"error": "Email is required"}, 400
-        
+            raise HTTPException(status_code=400, detail="Email is required")
         if not login_data.password:
-            return {"error": "Password is required"}, 400
-        
-        # SELECT user from database using DML query
+            raise HTTPException(status_code=400, detail="Password is required")
+
         user = UserQueries.get_user_by_email(login_data.email)
-        
+
         if not user:
-            logger.warning(f"❌ Login failed: User {login_data.email} not found")
-            raise HTTPException(
-                status_code=401, 
-                detail="Invalid email or password"
-            )
-        
-        # Check if user is active
+            logger.warning(f"Login failed: User {login_data.email} not found")
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+
         if not user.get('is_active'):
-            logger.warning(f"❌ Login failed: User {login_data.email} is inactive")
-            raise HTTPException(
-                status_code=403, 
-                detail="Account is disabled"
-            )
-        
-        # Verify password
+            logger.warning(f"Login failed: User {login_data.email} is inactive")
+            raise HTTPException(status_code=403, detail="Account is disabled")
+
         if not AuthService.verify_password(login_data.password, user['password_hash']):
-            logger.warning(f"❌ Login failed: Invalid password for {login_data.email}")
-            raise HTTPException(
-                status_code=401, 
-                detail="Invalid email or password"
-            )
-        
-        # Create JWT token
+            logger.warning(f"Login failed: Invalid password for {login_data.email}")
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+
         from datetime import timedelta
-
-#
-
         access_token = create_access_token(
             identity=str(user['user_id']),
             additional_claims={"role": user['role']},
             expires_delta=timedelta(hours=24)
         )
 
-        
-        
-        logger.info(f"✅ User logged in: {login_data.email} (role: {user['role']})")
-        
+        logger.info(f"User logged in: {login_data.email}, role: {user.get('role')}")
         return {
             "access_token": access_token,
             "token_type": "Bearer",
             "user": {
                 "user_id": user['user_id'],
+                "name": user.get('name'),
                 "email": user['email'],
-                "role": user['role']
+                "role": user['role'],
+                "avatar_url": user.get('avatar_url')
             }
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"❌ Login error: {str(e)}")
-        return {"error": "Login failed"}, 400
+        logger.error(f"Login error: {str(e)}")
+        raise HTTPException(status_code=400, detail="Login failed")
 
 @router.get("/me", tags=["Authentication"])
 async def get_current_user(authorization: str = None):
@@ -200,31 +176,29 @@ async def get_current_user(authorization: str = None):
     try:
         if not authorization:
             raise HTTPException(status_code=401, detail="Authorization header missing")
-        
-        # Extract user_id from token using helper
+
         user_id = extract_user_id(authorization)
-        
-        # SELECT user using DML
         user = UserQueries.get_user_by_id(user_id)
-        
+
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         return {
             "user": {
                 "user_id": user['user_id'],
                 "name": user['name'],
                 "email": user['email'],
                 "role": user['role'],
-                "is_active": user['is_active']
+                "is_active": user['is_active'],
+                "avatar_url": user.get('avatar_url')
             }
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting current user: {e}")
-        return {"error": "Failed to get user"}, 500
+        raise HTTPException(status_code=500, detail="Failed to get user")
 
 @router.post("/validate-token", tags=["Authentication"])
 async def validate_token(token: str):
@@ -238,15 +212,10 @@ async def validate_token(token: str):
         Token validity and claims
     """
     try:
-        # Extract using helper (will raise HTTPException if invalid)
         user_id = extract_user_id(f"Bearer {token}")
-        
-        return {
-            "valid": True,
-            "user_id": user_id
-        }, 200
-    except HTTPException as e:
-        raise e
+        return {"valid": True, "user_id": user_id}
+    except HTTPException:
+        raise
 
 @router.get("/permissions/{role}", tags=["Authentication"])
 async def get_role_permissions(role: str):
@@ -261,16 +230,13 @@ async def get_role_permissions(role: str):
     """
     try:
         permissions = RoleBasedAccessControl.get_permissions_for_role(role)
-        
+
         if not permissions:
             raise HTTPException(status_code=404, detail="Role not found")
-        
-        return {
-            "role": role,
-            "permissions": permissions
-        }, 200
-    except HTTPException as e:
-        raise e
+
+        return {"role": role, "permissions": permissions}
+    except HTTPException:
+        raise
 
 @router.get("/test", tags=["Authentication"])
 async def test_auth():

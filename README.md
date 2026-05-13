@@ -1,4 +1,4 @@
-# README: Crop Management DBMS
+# README: HarvestHUB
 ## Complete Execution Guide + Frontend + Reports
 
 ---
@@ -625,7 +625,7 @@ export default function Login() {
 
   return (
     <div className="login-container">
-      <h1>Crop Management System</h1>
+      <h1>HarvestHUB</h1>
       <form onSubmit={handleSubmit}>
         <input
           type="email"

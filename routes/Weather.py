@@ -130,3 +130,24 @@ async def update_weather_cell(weather_id: int, update_data: WeatherCellUpdate, a
     except Exception as e:
         logger.error(f"Error updating weather: {e}")
         raise HTTPException(status_code=500, detail="Failed to update weather record")
+
+
+@router.delete("/{weather_id}", tags=["Weather"])
+async def delete_weather(weather_id: int, authorization: str = Header(None)):
+    """DELETE weather record - admin only"""
+    try:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        user_id = extract_user_id(authorization)
+        RoleBasedAccessControl.check_permission(user_id, 'weather', 'delete')
+        weather = WeatherQueries.get_weather_by_id(weather_id)
+        if not weather:
+            raise HTTPException(status_code=404, detail="Weather record not found")
+        WeatherQueries.delete_weather(weather_id)
+        logger.info(f"Weather record {weather_id} deleted by user {user_id}")
+        return {"message": "Weather record deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting weather record: {e}")
+        raise HTTPException(status_code=400, detail="Failed to delete weather record")

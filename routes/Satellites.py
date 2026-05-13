@@ -108,3 +108,24 @@ async def update_satellite_cell(satellite_id: int, update_data: SatelliteCellUpd
     except Exception as e:
         logger.error(f"Error updating satellite: {e}")
         raise HTTPException(status_code=500, detail="Failed to update satellite")
+
+
+@router.delete("/{satellite_id}", tags=["Satellites"])
+async def delete_satellite(satellite_id: int, authorization: str = Header(None)):
+    """DELETE satellite - admin only"""
+    try:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        user_id = extract_user_id(authorization)
+        RoleBasedAccessControl.check_permission(user_id, 'satellites', 'delete')
+        satellite = SatelliteQueries.get_satellite_by_id(satellite_id)
+        if not satellite:
+            raise HTTPException(status_code=404, detail="Satellite not found")
+        SatelliteQueries.delete_satellite(satellite_id)
+        logger.info(f"Satellite {satellite_id} deleted by user {user_id}")
+        return {"message": "Satellite deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting satellite: {e}")
+        raise HTTPException(status_code=400, detail="Failed to delete satellite")

@@ -70,20 +70,20 @@ async def get_all_fields(authorization: str = Header(None)):
             fields = FieldQueries.get_all_fields()
             visibility = "all fields"
         
-        logger.info(f"✅ User {user_id} ({user['role']}) retrieved {len(fields)} fields")
-        
+        logger.info(f"User {user_id} ({user['role']}) retrieved {len(fields)} fields")
+
         return {
             "count": len(fields),
             "user_role": user['role'],
             "visibility": visibility,
             "fields": fields
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting fields: {e}")
-        return {"error": "Failed to retrieve fields"}, 500
+        raise HTTPException(status_code=500, detail="Failed to retrieve fields")
 
 @router.get("/{field_id}", tags=["Fields"])
 async def get_field_by_id(field_id: int, authorization: str = Header(None)):
@@ -117,15 +117,15 @@ async def get_field_by_id(field_id: int, authorization: str = Header(None)):
         if user['role'] == 'farmer' and field['user_id'] != user_id:
             raise HTTPException(status_code=403, detail="Cannot access others' fields")
         
-        logger.info(f"✅ Field {field_id} retrieved by user {user_id}")
-        
-        return field, 200
-    
-    except HTTPException as e:
-        raise e
+        logger.info(f"Field {field_id} retrieved by user {user_id}")
+
+        return field
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting field: {e}")
-        return {"error": "Failed to retrieve field"}, 500
+        raise HTTPException(status_code=500, detail="Failed to retrieve field")
 
 @router.post("/", status_code=201, tags=["Fields"])
 async def create_field(field_data: FieldCreate, authorization: str = Header(None)):
@@ -174,20 +174,20 @@ async def create_field(field_data: FieldCreate, authorization: str = Header(None
         )
         
         if not result:
-            return {"error": "Failed to create field"}, 500
-        
-        logger.info(f"✅ Field created: {field_data.field_name} by user {user_id}")
-        
+            raise HTTPException(status_code=500, detail="Failed to create field")
+
+        logger.info(f"Field created: {field_data.field_name} by user {user_id}")
+
         return {
             "message": "Field created successfully",
             "field": result
-        }, 201
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating field: {e}")
-        return {"error": "Failed to create field"}, 400
+        raise HTTPException(status_code=400, detail="Failed to create field")
 
 @router.put("/{field_id}", tags=["Fields"])
 async def update_field(field_id: int, field_data: FieldUpdate, authorization: str = Header(None)):
@@ -231,21 +231,20 @@ async def update_field(field_id: int, field_data: FieldUpdate, authorization: st
             longitude=field_data.longitude
         )
         
-        # GET updated field
         updated_field = FieldQueries.get_field_by_id(field_id)
-        
-        logger.info(f"✅ Field {field_id} updated by user {user_id}")
-        
+
+        logger.info(f"Field {field_id} updated by user {user_id}")
+
         return {
             "message": "Field updated successfully",
             "field": updated_field
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating field: {e}")
-        return {"error": "Failed to update field"}, 400
+        raise HTTPException(status_code=400, detail="Failed to update field")
 
 @router.patch("/{field_id}/cell", tags=["Fields"])
 async def update_field_cell(field_id: int, update_data: FieldCellUpdate, authorization: str = Header(None)):
@@ -294,20 +293,20 @@ async def update_field_cell(field_id: int, update_data: FieldCellUpdate, authori
             value=update_data.value
         )
         
-        logger.info(f"✅ Field {field_id} cell updated: {update_data.column_name} by user {user_id}")
-        
+        logger.info(f"Field {field_id} cell updated: {update_data.column_name} by user {user_id}")
+
         return {
             "message": f"Field {update_data.column_name} updated successfully",
             "field_id": field_id,
             "column": update_data.column_name,
             "new_value": update_data.value
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating field cell: {e}")
-        return {"error": "Failed to update field"}, 400
+        raise HTTPException(status_code=400, detail="Failed to update field")
 
 @router.delete("/{field_id}", tags=["Fields"])
 async def delete_field(field_id: int, authorization: str = Header(None)):
@@ -344,18 +343,17 @@ async def delete_field(field_id: int, authorization: str = Header(None)):
         if user['role'] == 'agronomist':
             raise HTTPException(status_code=403, detail="Agronomists cannot delete fields")
         
-        # DELETE field using DML (soft delete)
         FieldQueries.delete_field(field_id)
-        
-        logger.info(f"✅ Field {field_id} deleted by user {user_id}")
-        
-        return {"message": "Field deleted successfully"}, 200
-    
-    except HTTPException as e:
-        raise e
+
+        logger.info(f"Field {field_id} deleted by user {user_id}")
+
+        return {"message": "Field deleted successfully"}
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error deleting field: {e}")
-        return {"error": "Failed to delete field"}, 400
+        raise HTTPException(status_code=400, detail="Failed to delete field")
 
 # ============ COMPLEX QUERY ROUTES (JOINs) ============
 
@@ -389,18 +387,18 @@ async def get_field_details(field_id: int, authorization: str = Header(None)):
         if not details:
             raise HTTPException(status_code=404, detail="Field not found")
         
-        logger.info(f"✅ Field details retrieved for field {field_id}")
-        
+        logger.info(f"Field details retrieved for field {field_id}")
+
         return {
             "message": "Field details retrieved",
             "data": details
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting field details: {e}")
-        return {"error": "Failed to retrieve field details"}, 500
+        raise HTTPException(status_code=500, detail="Failed to retrieve field details")
 
 @router.get("/{field_id}/crops", tags=["Fields - Analytics"])
 async def get_field_crops(field_id: int, authorization: str = Header(None)):
@@ -430,18 +428,18 @@ async def get_field_crops(field_id: int, authorization: str = Header(None)):
         if not field_crops:
             raise HTTPException(status_code=404, detail="Field not found")
         
-        logger.info(f"✅ Field crops retrieved for field {field_id}")
-        
+        logger.info(f"Field crops retrieved for field {field_id}")
+
         return {
             "message": "Field crops retrieved",
             "data": field_crops
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting field crops: {e}")
-        return {"error": "Failed to retrieve field crops"}, 500
+        raise HTTPException(status_code=500, detail="Failed to retrieve field crops")
 
 @router.get("/region/{region_id}/all", tags=["Fields - Analytics"])
 async def get_fields_by_region(region_id: int, authorization: str = Header(None)):
@@ -473,16 +471,16 @@ async def get_fields_by_region(region_id: int, authorization: str = Header(None)
         if user['role'] == 'farmer':
             fields_in_region = [f for f in fields_in_region if f['user_id'] == user_id]
         
-        logger.info(f"✅ Retrieved {len(fields_in_region)} fields from region {region_id}")
-        
+        logger.info(f"Retrieved {len(fields_in_region)} fields from region {region_id}")
+
         return {
             "count": len(fields_in_region),
             "region_id": region_id,
             "fields": fields_in_region
-        }, 200
-    
-    except HTTPException as e:
-        raise e
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting fields by region: {e}")
-        return {"error": "Failed to retrieve fields"}, 500
+        raise HTTPException(status_code=500, detail="Failed to retrieve fields")
